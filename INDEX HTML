@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Segoe UI', sans-serif; padding: 20px; max-width: 800px; margin: auto; background-color: #f8f9fa; }
+      
+      h2 { text-align: center; color: #2c3e50; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; font-size: 28px; font-weight: 800; }
+      
+      /* New Green Button Styling */
+      .sheet-btn-container { text-align: center; margin-bottom: 30px; }
+      .sheet-btn { display: inline-block; background-color: #28a745; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px; text-transform: uppercase; transition: background 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+      .sheet-btn:hover { background-color: #218838; color: white; }
+      
+      .section-box { background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #dee2e6; }
+      .section-title { font-size: 16px; color: #e83e8c; border-bottom: 2px solid #e83e8c; padding-bottom: 10px; margin-bottom: 20px; text-transform: uppercase; font-weight: bold; }
+      label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 12px; color: #495057; text-transform: uppercase; }
+      input[type="text"], input[type="number"], select { width: 100%; padding: 12px; box-sizing: border-box; text-transform: uppercase; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
+      .two-col { display: flex; gap: 20px; }
+      .two-col .form-group { flex: 1; margin-bottom: 20px; }
+      .hidden-group { display: none; }
+      .status-text { font-size: 12px; font-style: italic; margin-top: 6px; display: block; color: #6c757d; }
+      .found { color: #28a745; font-weight: bold; }
+      .multiple { color: #fd7e14; font-weight: bold; }
+      .new { color: #dc3545; font-weight: bold; }
+      
+      /* Main Submit Button Styling */
+      button { width: 100%; padding: 18px; background-color: #e83e8c; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+      button:disabled { background-color: #adb5bd; }
+      
+      .lock-label { display: flex; justify-content: space-between; align-items: center; }
+      .lock-toggle { font-weight: normal; font-size: 11px; color: #e83e8c; cursor: pointer; display: flex; align-items: center; gap: 4px; text-transform: none; }
+      .lock-toggle input { width: auto; margin: 0; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h2>Hematology - Oncology Billing Input Form</h2>
+    
+    <div class="sheet-btn-container">
+      <a id="openSheetBtn" href="#" target="_blank" class="sheet-btn" style="display: none;">Open Master Spreadsheet ↗</a>
+    </div>
+    
+    <form id="billingForm">
+      <div class="section-box">
+        <h3 class="section-title">Patient Demographics</h3>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Full Name Paste (Last, First Middle) or Type Last Name</label>
+          <input type="text" id="lastName" onchange="runSearch()" oninput="resetSearchState()">
+          <span id="searchStatus" class="status-text">Ready.</span>
+        </div>
+        <div id="multipleMatchContainer" style="display:none; background-color: #fff3cd; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ffeeba;">
+          <label>Multiple Found - Select:</label>
+          <select id="patientDropdown" onchange="selectFromMultiple()"></select>
+        </div>
+        <div class="two-col">
+          <div class="form-group"><label>First Name</label><input type="text" id="firstName"></div>
+          <div class="form-group"><label>Middle Name</label><input type="text" id="middleName"></div>
+        </div>
+        <div class="two-col">
+          <div class="form-group"><label>Physician</label><input type="text" id="attending"></div>
+          <div class="form-group"><label>Diagnosis</label><input type="text" id="diagnosis"></div>
+        </div>
+      </div>
+
+      <div class="section-box">
+        <h3 class="section-title">Visit Details</h3>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="lock-label">
+              Date (MMDDYYYY)
+              <label class="lock-toggle"><input type="checkbox" id="lockDate"> Lock Date</label>
+            </label>
+            <input type="text" id="dateHandled" oninput="formatDate(this)">
+          </div>
+          <div class="form-group"><label>Hours</label><input type="number" id="hours"></div>
+        </div>
+        <div class="two-col">
+          <div class="form-group"><label>RN In Charge</label><input type="text" id="rnCharge"></div>
+          <div class="form-group"><label>Protocol</label><input type="text" id="protocol"></div>
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Procedure</label>
+          <select id="procedure">
+            <option value="">-- Choose Procedure --</option>
+            <option value="CHEMOTHERAPY">CHEMOTHERAPY</option>
+            <option value="CHEMOTHERAPY - INJECTION">CHEMOTHERAPY - INJECTION</option>
+            <option value="CONSULTATION">CONSULTATION</option>
+            <option value="BLOOD TRANSFUSION">BLOOD TRANSFUSION</option>
+            <option value="BLOOD TRANSFUSION - CHEMOTHERAPY">BLOOD TRANSFUSION - CHEMOTHERAPY</option>
+            <option value="BLOOD TRANSFUSION - INJECTION">BLOOD TRANSFUSION - INJECTION</option>
+            <option value="BONE MARROW ASPIRATION">BONE MARROW ASPIRATION</option>
+            <option value="PHLEBOTOMY">PHLEBOTOMY</option>
+            <option value="INJECTION">INJECTION</option>
+            <option value="VAD FLUSHING">VAD FLUSHING</option>
+            <option value="PURCHASE">PURCHASE</option>
+            <option value="EZ PUMP REMOVAL">EZ PUMP REMOVAL</option>
+            <option value="HYDRATION">HYDRATION</option>
+            <option value="OXYGENATION">OXYGENATION</option>
+            <option value="IV INSERTION">IV INSERTION</option>
+          </select>
+        </div>
+        <div class="two-col">
+          <div class="form-group"><label>Patient Type</label><select id="patientType"><option value="">-- Select --</option><option value="INPATIENT">INPATIENT</option><option value="OUTPATIENT">OUTPATIENT</option><option value="ADMITTED">ADMITTED</option><option value="CHARITY">CHARITY</option></select></div>
+          <div class="form-group"><label>HMO / GL</label><select id="hmoGl"><option value="">-- Select --</option><option value="HMO">HMO</option><option value="GL">GL</option><option value="EMPLOYEE">EMPLOYEE</option><option value="COMPANY BENEFIT">COMPANY BENEFIT</option><option value="NONE APPLICABLE">NONE APPLICABLE</option></select></div>
+        </div>
+        <div class="two-col">
+          <div class="form-group"><label>Compounding</label><select id="compounding"><option value="">-- Select --</option><option value="YES">YES</option><option value="NO">NO</option></select></div>
+          <div class="form-group"><label>Handling</label><select id="handling"><option value="">-- Select --</option><option value="YES">YES</option><option value="NO">NO</option></select></div>
+        </div>
+      </div>
+
+      <div class="section-box">
+        <h3 class="section-title">Billing</h3>
+        <div class="two-col">
+          <div class="form-group">
+            <label>Discount Type</label>
+            <select id="discountType" onchange="toggleDiscountFields()">
+              <option value="">-- Select --</option>
+              <option value="NONE">NONE</option>
+              <option value="SENIOR CITIZEN">SENIOR CITIZEN</option>
+              <option value="PWD">PWD</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>PhilHealth Type</label>
+            <select id="philhealthType" onchange="toggleDiscountFields()">
+              <option value="">-- Select --</option>
+              <option value="NONE">NONE</option>
+              <option value="CHEMOTHERAPY">CHEMOTHERAPY</option>
+              <option value="BLOOD TRANSFUSION">BLOOD TRANSFUSION</option>
+              <option value="BMA">BMA</option>
+            </select>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-group"><label>Hospital Charges</label><input type="number" id="totalCharges" value="0"></div>
+          <div class="form-group"><label>Other Charges</label><input type="number" id="otherCharges" value="0"></div>
+        </div>
+        <div class="two-col">
+          <div class="form-group" id="pwdAmountGroup" class="hidden-group">
+            <label>PWD/Senior Amt</label><input type="number" id="pwdAmount" value="0">
+          </div>
+          <div class="form-group" id="phAmountGroup" class="hidden-group">
+            <label>PhilHealth Amt</label><input type="number" id="phAmount" value="0">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Cancelations</label><input type="number" id="cancelations" value="0">
+        </div>
+        <div class="form-group">
+          <label>Remarks (Optional)</label><input type="text" id="remarks">
+        </div>
+      </div>
+
+      <button type="button" onclick="submitData()" id="submitBtn">Submit Record</button>
+    </form>
+
+    <script>
+      let matches = [];
+
+      // INITIALIZATION: Fetch the Spreadsheet URL to link the Green Button
+      document.addEventListener('DOMContentLoaded', function() {
+        google.script.run.withSuccessHandler(function(url) {
+          const btn = document.getElementById('openSheetBtn');
+          btn.href = url;
+          btn.style.display = 'inline-block'; // Reveals the button once the link is ready
+        }).getSheetUrl();
+      });
+
+      function resetSearchState() {
+        document.getElementById('multipleMatchContainer').style.display = 'none';
+        const status = document.getElementById('searchStatus');
+        status.innerHTML = "Typing...";
+        status.className = "status-text";
+      }
+
+      function toggleDiscountFields() {
+        const disc = document.getElementById('discountType').value;
+        const ph = document.getElementById('philhealthType').value;
+        
+        document.getElementById('pwdAmountGroup').style.display = (disc !== "NONE" && disc !== "") ? "block" : "none";
+        document.getElementById('phAmountGroup').style.display = (ph !== "NONE" && ph !== "") ? "block" : "none";
+        
+        if(disc === "NONE" || disc === "") document.getElementById('pwdAmount').value = 0;
+        if(ph === "NONE" || ph === "") document.getElementById('phAmount').value = 0;
+      }
+
+      function resetForm() {
+        const isDateLocked = document.getElementById('lockDate').checked;
+        const savedDate = document.getElementById('dateHandled').value;
+
+        document.getElementById('billingForm').reset();
+        
+        if (isDateLocked) {
+          document.getElementById('lockDate').checked = true;
+          document.getElementById('dateHandled').value = savedDate;
+        }
+
+        document.getElementById('multipleMatchContainer').style.display = 'none';
+        document.getElementById('searchStatus').innerHTML = "Ready.";
+        document.getElementById('searchStatus').className = "status-text";
+        toggleDiscountFields();
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').innerHTML = "Submit Record";
+      }
+
+      function formatDate(e) {
+        let v = e.value.replace(/\D/g, ''); 
+        if (v.length > 8) v = v.slice(0, 8);
+        if (v.length >= 5) e.value = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
+        else if (v.length >= 3) e.value = v.slice(0,2) + '/' + v.slice(2);
+        else e.value = v;
+      }
+
+      function runSearch() {
+        let input = document.getElementById('lastName').value.trim();
+        
+        if(!input) {
+          resetSearchState();
+          document.getElementById('searchStatus').innerHTML = "Ready.";
+          return; 
+        }
+
+        if(input.includes(',')) {
+          let p = input.split(',');
+          let ln = p[0].trim().toUpperCase();
+          let names = p[1].trim().split(' ');
+          let fn = names[0].toUpperCase();
+          let mn = names.length > 1 ? names.slice(1).join(' ').toUpperCase() : "";
+          document.getElementById('lastName').value = ln;
+          document.getElementById('firstName').value = fn;
+          document.getElementById('middleName').value = mn;
+          input = ln;
+        }
+
+        const status = document.getElementById('searchStatus');
+        status.innerHTML = "Searching database...";
+        status.className = "status-text";
+
+        google.script.run.withSuccessHandler(res => {
+          if(res.status === 'single') {
+            fill(res.patient);
+            status.innerHTML = "✓ Patient record recognized."; 
+            status.className = "status-text found"; 
+          }
+          else if(res.status === 'multiple') {
+            matches = res.patients;
+            let opt = '<option value="">-- Choose Correct Patient --</option>';
+            matches.forEach((p, i) => opt += `<option value="${i}">${p.lastName}, ${p.firstName} (Dr. ${p.attending})</option>`);
+            document.getElementById('patientDropdown').innerHTML = opt;
+            document.getElementById('multipleMatchContainer').style.display = 'block';
+            status.innerHTML = "⚠ Multiple records found."; 
+            status.className = "status-text multiple";
+          } else {
+            status.innerHTML = "⚠ New Patient record will be created."; 
+            status.className = "status-text new";
+          }
+        }).searchPatient(input, document.getElementById('firstName').value);
+      }
+
+      function selectFromMultiple() {
+        const i = document.getElementById('patientDropdown').value;
+        if(i !== "") {
+          fill(matches[i]);
+          const status = document.getElementById('searchStatus');
+          status.innerHTML = "✓ Patient selected."; 
+          status.className = "status-text found";
+        }
+      }
+
+      function fill(p) {
+        document.getElementById('firstName').value = p.firstName;
+        document.getElementById('middleName').value = p.middleName;
+        document.getElementById('attending').value = p.attending;
+        document.getElementById('diagnosis').value = p.diagnosis;
+        document.getElementById('protocol').value = p.protocol;
+        if (p.discountType) {
+          document.getElementById('discountType').value = p.discountType;
+        }
+        toggleDiscountFields(); 
+      }
+
+      function submitData() {
+        const rawDate = document.getElementById('dateHandled').value;
+        if (rawDate.length !== 10) { alert("Invalid Date format. Use MMDDYYYY."); return; }
+        const d = rawDate.split('/');
+        const formData = {
+          dateHandled: `${d[2]}-${d[0]}-${d[1]}`,
+          lastName: document.getElementById('lastName').value,
+          firstName: document.getElementById('firstName').value,
+          middleName: document.getElementById('middleName').value,
+          attending: document.getElementById('attending').value,
+          rnCharge: document.getElementById('rnCharge').value,
+          diagnosis: document.getElementById('diagnosis').value,
+          procedure: document.getElementById('procedure').value,
+          protocol: document.getElementById('protocol').value,
+          patientType: document.getElementById('patientType').value,
+          discountType: document.getElementById('discountType').value,
+          philhealthType: document.getElementById('philhealthType').value,
+          compounding: document.getElementById('compounding').value,
+          handling: document.getElementById('handling').value,
+          hmoGl: document.getElementById('hmoGl').value,
+          totalCharges: document.getElementById('totalCharges').value,
+          otherCharges: document.getElementById('otherCharges').value,
+          cancelations: document.getElementById('cancelations').value,
+          pwdAmount: document.getElementById('pwdAmount').value,
+          phAmount: document.getElementById('phAmount').value,
+          hours: document.getElementById('hours').value,
+          remarks: document.getElementById('remarks').value
+        };
+        
+        const req = ["lastName","firstName","middleName","attending","diagnosis","dateHandled","hours","rnCharge","protocol","procedure","patientType","hmoGl","compounding","handling","discountType","philhealthType"];
+        for(let k of req) if(!formData[k]) { alert("Required field missing. Please fill out all necessary fields."); return; }
+        
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('submitBtn').innerHTML = "SAVING...";
+        
+        google.script.run
+          .withSuccessHandler(() => { 
+            alert("Record successfully saved!"); 
+            resetForm(); 
+          })
+          .withFailureHandler(err => { 
+            alert("Error: " + err.message); 
+            document.getElementById('submitBtn').disabled = false; 
+            document.getElementById('submitBtn').innerHTML = "Submit Record";
+          })
+          .saveRecord(formData);
+      }
+    </script>
+  </body>
+</html>
