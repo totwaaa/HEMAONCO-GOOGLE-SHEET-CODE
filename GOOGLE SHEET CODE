@@ -1,0 +1,262 @@
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Hematology - Oncology Billing Input Form')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('Clinical Tools')
+      .addItem('Sync Monthly Tab', 'showSyncModal')
+      .addItem('Fix Legacy Discounts', 'fixLegacyDiscounts')
+      .addToUi();
+}
+// NEW HELPER: Fetches the URL of the Google Sheet so the App can link to it
+function getSheetUrl() {
+  return SpreadsheetApp.getActiveSpreadsheet().getUrl();
+}
+function showSyncModal() {
+  let htmlString = `
+    <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', sans-serif; padding: 15px; color: #333; }
+          p { margin-top: 0; font-size: 14px; font-weight: bold; color: #495057; }
+          button { width: 100%; padding: 12px; margin-bottom: 10px; background-color: #e83e8c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; text-transform: uppercase; }
+          button:hover { background-color: #c2125d; }
+          .loader { display: none; text-align: center; color: #e83e8c; font-weight: bold; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <p>Select a month to Synchronize:</p>
+        <div id="btnContainer">Scanning tabs...</div>
+        <div id="loader" class="loader">Synchronizing... Please wait.</div>
+        <script>
+          google.script.run.withSuccessHandler(function(tabs) {
+            let html = '';
+            if(tabs.length === 0) {
+              html = '<p style="color:red; font-weight:normal;">No monthly tabs found yet.</p>';
+            } else {
+              tabs.forEach(tab => {
+                html += '<button onclick="runSync(\\'' + tab + '\\')">' + tab + '</button>';
+              });
+            }
+            document.getElementById('btnContainer').innerHTML = html;
+          }).getMonthlyTabs();
+
+          function runSync(tabName) {
+            document.getElementById('btnContainer').style.display = 'none';
+            document.getElementById('loader').style.display = 'block';
+            google.script.run.withSuccessHandler(function() {
+              google.script.host.close();
+            }).refreshMonthlyTab(tabName);
+          }
+        </script>
+      </body>
+    </html>
+  `;
+  var htmlOutput = HtmlService.createHtmlOutput(htmlString).setWidth(300).setHeight(400);
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Sync Monthly Data');
+}
+
+function getMonthlyTabs() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const excludes = ["All Responses", "Patient Database", "TEMPLATE"];
+  return ss.getSheets().map(s => s.getName()).filter(name => !excludes.includes(name));
+}
+
+function fixLegacyDiscounts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dbSheet = ss.getSheetByName('Patient Database');
+  if (!dbSheet) return SpreadsheetApp.getUi().alert("Error: Database not found.");
+  const lastRow = dbSheet.getLastRow();
+  if (lastRow < 2) return SpreadsheetApp.getUi().alert("Database is empty.");
+  const range = dbSheet.getRange(2, 1, lastRow - 1, 7);
+  const data = range.getValues();
+  let changes = 0;
+  for (let i = 0; i < data.length; i++) {
+    let original = data[i][6] ? data[i][6].toString().toUpperCase().trim() : "";
+    if (original === "YES - PWD" || original.includes("PWD")) data[i][6] = "PWD";
+    else if (original === "YES - SENIOR CITIZEN" || original.includes("SENIOR")) data[i][6] = "SENIOR CITIZEN";
+    else if (original === "NO" || original === "") data[i][6] = "NONE";
+    if (original !== data[i][6]) changes++;
+  }
+  range.setValues(data);
+  SpreadsheetApp.getUi().alert("Migration Complete! Updated " + changes + " records.");
+}
+
+function searchPatient(lastNameInput, firstNameInput) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Patient Database');
+    if (!dbSheet) return { status: 'none' };
+    const cleanLN = lastNameInput.toString().toUpperCase().trim();
+    const cleanFN = firstNameInput ? firstNameInput.toString().toUpperCase().trim() : "";
+    const lastRow = dbSheet.getLastRow();
+    if (lastRow < 2) return { status: 'none' };
+    const data = dbSheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    let matches = [];
+    for (let i = 0; i < data.length; i++) {
+      let dbLN = data[i][0].toString().toUpperCase().trim();
+      let dbFN = data[i][1].toString().toUpperCase().trim();
+      if (cleanFN !== "" && dbLN === cleanLN && dbFN === cleanFN) {
+        return { status: 'single', patient: { lastName: data[i][0], firstName: data[i][1], middleName: data[i][2], attending: data[i][3], diagnosis: data[i][4], protocol: data[i][5], discountType: data[i][6] }};
+      }
+      if (dbLN === cleanLN) matches.push({ lastName: data[i][0], firstName: data[i][1], middleName: data[i][2], attending: data[i][3], diagnosis: data[i][4], protocol: data[i][5], discountType: data[i][6] });
+    }
+    if (matches.length === 1) return { status: 'single', patient: matches[0] };
+    if (matches.length > 1) return { status: 'multiple', patients: matches };
+    return { status: 'none' };
+  } catch(e) { throw new Error("Search failed: " + e.message); }
+}
+
+function onEdit(e) {
+  const sheet = e.source.getActiveSheet();
+  if (sheet.getName() !== "All Responses") return;
+  const row = e.range.getRow();
+  if (row < 2) return;
+  const dateVal = sheet.getRange(row, 3).getValue();
+  if (!dateVal || isNaN(new Date(dateVal).getTime())) return;
+  const monthTab = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "MMMM yyyy");
+  refreshMonthlyTab(monthTab);
+}
+
+function saveRecord(formData) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const clean = (s) => s ? s.toString().replace(/,/g, '').toUpperCase().trim() : '';
+    let row = new Array(41).fill('');
+    row[2] = formData.dateHandled;
+    row[3] = clean(formData.lastName);
+    row[4] = clean(formData.firstName);
+    row[5] = clean(formData.middleName);
+    row[6] = clean(formData.attending);
+    row[7] = clean(formData.rnCharge);
+    row[8] = clean(formData.diagnosis);
+    row[9] = clean(formData.procedure);
+    row[10] = clean(formData.protocol);
+    row[11] = clean(formData.patientType);
+    row[12] = clean(formData.discountType);
+    row[13] = clean(formData.philhealthType);
+    row[14] = clean(formData.compounding);
+    row[15] = clean(formData.handling);
+    row[16] = clean(formData.hmoGl);
+    row[17] = Number(formData.totalCharges) || 0;
+    row[18] = Number(formData.otherCharges) || 0;
+    row[19] = Number(formData.cancelations) || 0;
+    row[20] = Number(formData.phAmount) || 0;
+    row[21] = Number(formData.pwdAmount) || 0;
+    row[22] = Math.round(Number(formData.hours)) || 0;
+    row[40] = clean(formData.remarks);
+    const master = ss.getSheetByName("All Responses") || ss.insertSheet("All Responses");
+    master.appendRow(row);
+    
+    const db = ss.getSheetByName("Patient Database") || ss.insertSheet("Patient Database");
+    const dbData = db.getLastRow() > 1 ? db.getRange(1, 1, db.getLastRow(), 2).getValues() : [["Last","First"]];
+    let foundIdx = -1;
+    for(let i=1; i<dbData.length; i++) {
+      if(clean(dbData[i][0]) === row[3] && clean(dbData[i][1]) === row[4]) { foundIdx = i + 1; break; }
+    }
+    const profile = [row[3], row[4], row[5], row[6], row[8], row[10], row[12]];
+    if(foundIdx > -1) db.getRange(foundIdx, 1, 1, 7).setValues([profile]);
+    else db.appendRow(profile);
+    cleanAndSortDatabase(db);
+    
+    const d = new Date(formData.dateHandled);
+    const monthTab = Utilities.formatDate(d, Session.getScriptTimeZone(), "MMMM yyyy");
+    refreshMonthlyTab(monthTab);
+    return true;
+  } catch(e) { throw new Error("Save Error: " + e.message); }
+}
+
+function cleanAndSortDatabase(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const range = sheet.getRange(2, 1, lastRow - 1, 7);
+  const values = range.getValues().map(r => r.map(c => c.toString().replace(/,/g, '').toUpperCase().trim()));
+  range.setValues(values);
+  range.sort({column: 1, ascending: true});
+}
+
+function refreshMonthlyTab(tabName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const master = ss.getSheetByName("All Responses");
+  if (!master) return;
+  
+  let monthSheet = ss.getSheetByName(tabName);
+  let isNewSheet = false; // Track if we just created a new sheet
+  
+  // Create or copy the sheet if it doesn't exist
+  if (!monthSheet) {
+    const templateSheet = ss.getSheetByName("TEMPLATE");
+    if (templateSheet) {
+      monthSheet = templateSheet.copyTo(ss).setName(tabName);
+      monthSheet.showSheet(); // UNHIDE THE CLONED TEMPLATE
+    } else {
+      monthSheet = ss.insertSheet(tabName);
+    }
+    isNewSheet = true;
+  }
+  
+  // Automatically Protect the new sheet so only the owner can edit it
+  if (isNewSheet) {
+    const protection = monthSheet.protect().setDescription('Locked: ' + tabName);
+    // Remove all users who aren't the owner
+    protection.removeEditors(protection.getEditors());
+    if (protection.canDomainEdit()) {
+      protection.setDomainEdit(false);
+    }
+  }
+  
+  const allData = master.getDataRange().getValues();
+  const filtered = allData.filter(r => {
+    if(!r[2] || r[2] === "Date") return false;
+    let d = new Date(r[2]);
+    return !isNaN(d.getTime()) && Utilities.formatDate(d, Session.getScriptTimeZone(), "MMMM yyyy") === tabName;
+  }).sort((a,b) => new Date(a[2]) - new Date(b[2]));
+  
+  let lastRow = monthSheet.getLastRow();
+  if(lastRow > 4) {
+    monthSheet.getRange(5, 1, lastRow - 4, 41).clear().setBackground(null).setFontColor("black").setFontWeight("normal");
+  }
+  
+  if (filtered.length === 0) return;
+  
+  let cursor = 5;
+  let grouped = {};
+  filtered.forEach(r => {
+    let dStr = Utilities.formatDate(new Date(r[2]), Session.getScriptTimeZone(), "MMMM d, yyyy - EEEE");
+    if(!grouped[dStr]) grouped[dStr] = [];
+    grouped[dStr].push(r);
+  });
+  
+  for(let date in grouped) {
+    monthSheet.getRange(cursor, 3).setValue(`--- ${date} (${grouped[date].length}) ---`);
+    monthSheet.getRange(cursor, 1, 1, 41).setBackground("black").setFontColor("white").setFontWeight("bold");
+    cursor++;
+    let patients = grouped[date].map(p => {
+      let cleanRow = p.map(cell => {
+        if (cell === null || cell === undefined) return '';
+        if (typeof cell === 'string') return cell.toString().replace(/,/g, '').toUpperCase().trim();
+        return cell;
+      });
+      let fullRow = new Array(41).fill('');
+      for (let i = 0; i < Math.min(cleanRow.length, 41); i++) fullRow[i] = cleanRow[i];
+      fullRow[2] = ""; 
+      return fullRow;
+    });
+    monthSheet.getRange(cursor, 1, patients.length, 41).setValues(patients);
+    monthSheet.getRange(cursor, 1, patients.length, 41).setBorder(false, true, false, true, true, false); 
+    monthSheet.getRange(cursor, 24, patients.length, 17).clearContent();
+    cursor += patients.length;
+  }
+  
+  monthSheet.getRange(cursor, 1, 1, 41).setBackground("#e0e0e0").setFontWeight("bold").setBorder(true, true, true, true, false, false);
+  monthSheet.getRange(cursor, 3).setValue(`TOTAL PATIENTS FOR ${tabName.toUpperCase()}: (${filtered.length})`);
+  
+  const sumCols = [21, 22, 26, 29, 32, 35, 36, 39, 40];
+  sumCols.forEach(c => {
+    let colLet = monthSheet.getRange(1, c).getA1Notation().replace(/\d/g,'');
+    monthSheet.getRange(cursor, c).setFormula(`=SUM(${colLet}5:${colLet}${cursor-1})`);
+  });
+}
