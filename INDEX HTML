@@ -7,7 +7,6 @@
       
       h2 { text-align: center; color: #2c3e50; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; font-size: 28px; font-weight: 800; }
       
-      /* New Green Button Styling */
       .sheet-btn-container { text-align: center; margin-bottom: 30px; }
       .sheet-btn { display: inline-block; background-color: #28a745; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px; text-transform: uppercase; transition: background 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
       .sheet-btn:hover { background-color: #218838; color: white; }
@@ -24,7 +23,6 @@
       .multiple { color: #fd7e14; font-weight: bold; }
       .new { color: #dc3545; font-weight: bold; }
       
-      /* Main Submit Button Styling */
       button { width: 100%; padding: 18px; background-color: #e83e8c; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
       button:disabled { background-color: #adb5bd; }
       
@@ -44,7 +42,10 @@
       <div class="section-box">
         <h3 class="section-title">Patient Demographics</h3>
         <div class="form-group" style="margin-bottom:20px;">
-          <label>Full Name Paste (Last, First Middle) or Type Last Name</label>
+          <label class="lock-label">
+            Full Name Paste (Last, First Middle) or Type Last Name
+            <label class="lock-toggle"><input type="checkbox" id="lockPatient"> Lock Patient</label>
+          </label>
           <input type="text" id="lastName" onchange="runSearch()" oninput="resetSearchState()">
           <span id="searchStatus" class="status-text">Ready.</span>
         </div>
@@ -57,8 +58,16 @@
           <div class="form-group"><label>Middle Name</label><input type="text" id="middleName"></div>
         </div>
         <div class="two-col">
-          <div class="form-group"><label>Physician</label><input type="text" id="attending"></div>
-          <div class="form-group"><label>Diagnosis</label><input type="text" id="diagnosis"></div>
+          <div class="form-group">
+            <label>Physician</label>
+            <input type="text" id="attending" list="attendingList">
+            <datalist id="attendingList"></datalist>
+          </div>
+          <div class="form-group">
+            <label>Diagnosis</label>
+            <input type="text" id="diagnosis" list="diagnosisList">
+            <datalist id="diagnosisList"></datalist>
+          </div>
         </div>
       </div>
 
@@ -75,7 +84,11 @@
           <div class="form-group"><label>Hours</label><input type="number" id="hours"></div>
         </div>
         <div class="two-col">
-          <div class="form-group"><label>RN In Charge</label><input type="text" id="rnCharge"></div>
+          <div class="form-group">
+            <label>RN In Charge</label>
+            <input type="text" id="rnCharge" list="rnList">
+            <datalist id="rnList"></datalist>
+          </div>
           <div class="form-group"><label>Protocol</label><input type="text" id="protocol"></div>
         </div>
         <div class="form-group" style="margin-bottom:20px;">
@@ -158,14 +171,26 @@
     <script>
       let matches = [];
 
-      // INITIALIZATION: Fetch the Spreadsheet URL to link the Green Button
       document.addEventListener('DOMContentLoaded', function() {
         google.script.run.withSuccessHandler(function(url) {
           const btn = document.getElementById('openSheetBtn');
           btn.href = url;
-          btn.style.display = 'inline-block'; // Reveals the button once the link is ready
+          btn.style.display = 'inline-block'; 
         }).getSheetUrl();
+
+        google.script.run.withSuccessHandler(function(data) {
+          populateDatalist('rnList', data.rns);
+          populateDatalist('attendingList', data.attendings);
+          populateDatalist('diagnosisList', data.diagnoses);
+        }).getDropdownData();
       });
+
+      function populateDatalist(id, items) {
+        const datalist = document.getElementById(id);
+        let html = '';
+        items.forEach(item => { html += `<option value="${item}">`; });
+        datalist.innerHTML = html;
+      }
 
       function resetSearchState() {
         document.getElementById('multipleMatchContainer').style.display = 'none';
@@ -186,19 +211,53 @@
       }
 
       function resetForm() {
+        // Capture Date Lock
         const isDateLocked = document.getElementById('lockDate').checked;
         const savedDate = document.getElementById('dateHandled').value;
 
+        // Capture Patient Lock
+        const isPatientLocked = document.getElementById('lockPatient').checked;
+        const savedLN = document.getElementById('lastName').value;
+        const savedFN = document.getElementById('firstName').value;
+        const savedMN = document.getElementById('middleName').value;
+        const savedAtt = document.getElementById('attending').value;
+        const savedDiag = document.getElementById('diagnosis').value;
+        const savedProtocol = document.getElementById('protocol').value;
+        const savedDisc = document.getElementById('discountType').value;
+
+        // Reset all fields
         document.getElementById('billingForm').reset();
         
+        // Restore Date if locked
         if (isDateLocked) {
           document.getElementById('lockDate').checked = true;
           document.getElementById('dateHandled').value = savedDate;
         }
 
+        // Restore Patient if locked
+        if (isPatientLocked) {
+          document.getElementById('lockPatient').checked = true;
+          document.getElementById('lastName').value = savedLN;
+          document.getElementById('firstName').value = savedFN;
+          document.getElementById('middleName').value = savedMN;
+          document.getElementById('attending').value = savedAtt;
+          document.getElementById('diagnosis').value = savedDiag;
+          document.getElementById('protocol').value = savedProtocol;
+          document.getElementById('discountType').value = savedDisc;
+        }
+
+        // Manage UI States
         document.getElementById('multipleMatchContainer').style.display = 'none';
-        document.getElementById('searchStatus').innerHTML = "Ready.";
-        document.getElementById('searchStatus').className = "status-text";
+        
+        const status = document.getElementById('searchStatus');
+        if (isPatientLocked) {
+          status.innerHTML = "✓ Patient Locked.";
+          status.className = "status-text found";
+        } else {
+          status.innerHTML = "Ready.";
+          status.className = "status-text";
+        }
+
         toggleDiscountFields();
         document.getElementById('submitBtn').disabled = false;
         document.getElementById('submitBtn').innerHTML = "Submit Record";
