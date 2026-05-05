@@ -11,10 +11,43 @@ function onOpen() {
       .addItem('Fix Legacy Discounts', 'fixLegacyDiscounts')
       .addToUi();
 }
-// NEW HELPER: Fetches the URL of the Google Sheet so the App can link to it
+
 function getSheetUrl() {
   return SpreadsheetApp.getActiveSpreadsheet().getUrl();
 }
+
+// NEW: Scans the database to provide the unique lists for the dropdown autocompletes
+function getDropdownData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const master = ss.getSheetByName("All Responses");
+  const db = ss.getSheetByName("Patient Database");
+  
+  let rns = new Set();
+  let attendings = new Set();
+  let diagnoses = new Set();
+
+  if (master && master.getLastRow() > 1) {
+    // Column H (Index 8) is where RN in Charge is saved
+    const masterData = master.getRange(2, 8, master.getLastRow() - 1, 1).getValues();
+    masterData.forEach(r => { if(r[0]) rns.add(r[0].toString().toUpperCase().trim()); });
+  }
+
+  if (db && db.getLastRow() > 1) {
+    // Column D (4) is Attending, Column E (5) is Diagnosis
+    const dbData = db.getRange(2, 4, db.getLastRow() - 1, 2).getValues();
+    dbData.forEach(r => {
+      if(r[0]) attendings.add(r[0].toString().toUpperCase().trim());
+      if(r[1]) diagnoses.add(r[1].toString().toUpperCase().trim());
+    });
+  }
+
+  return {
+    rns: Array.from(rns).sort(),
+    attendings: Array.from(attendings).sort(),
+    diagnoses: Array.from(diagnoses).sort()
+  };
+}
+
 function showSyncModal() {
   let htmlString = `
     <html>
@@ -35,7 +68,7 @@ function showSyncModal() {
           google.script.run.withSuccessHandler(function(tabs) {
             let html = '';
             if(tabs.length === 0) {
-              html = '<p style="color:red; font-weight:normal;">No monthly tabs found yet.</p>';
+              html = '<p style="color:red; font-weight:normal;">No valid monthly tabs found.</p>';
             } else {
               tabs.forEach(tab => {
                 html += '<button onclick="runSync(\\'' + tab + '\\')">' + tab + '</button>';
@@ -59,10 +92,13 @@ function showSyncModal() {
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Sync Monthly Data');
 }
 
+// UPDATED: Strictly filters tabs to only show "Month YYYY" formatted names (e.g., "April 2026")
 function getMonthlyTabs() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const excludes = ["All Responses", "Patient Database", "TEMPLATE"];
-  return ss.getSheets().map(s => s.getName()).filter(name => !excludes.includes(name));
+  const monthRegex = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}$/i;
+  return ss.getSheets()
+           .map(s => s.getName())
+           .filter(name => monthRegex.test(name));
 }
 
 function fixLegacyDiscounts() {
@@ -184,24 +220,21 @@ function refreshMonthlyTab(tabName) {
   if (!master) return;
   
   let monthSheet = ss.getSheetByName(tabName);
-  let isNewSheet = false; // Track if we just created a new sheet
+  let isNewSheet = false;
   
-  // Create or copy the sheet if it doesn't exist
   if (!monthSheet) {
     const templateSheet = ss.getSheetByName("TEMPLATE");
     if (templateSheet) {
       monthSheet = templateSheet.copyTo(ss).setName(tabName);
-      monthSheet.showSheet(); // UNHIDE THE CLONED TEMPLATE
+      monthSheet.showSheet();
     } else {
       monthSheet = ss.insertSheet(tabName);
     }
     isNewSheet = true;
   }
   
-  // Automatically Protect the new sheet so only the owner can edit it
   if (isNewSheet) {
     const protection = monthSheet.protect().setDescription('Locked: ' + tabName);
-    // Remove all users who aren't the owner
     protection.removeEditors(protection.getEditors());
     if (protection.canDomainEdit()) {
       protection.setDomainEdit(false);
@@ -209,11 +242,24 @@ function refreshMonthlyTab(tabName) {
   }
   
   const allData = master.getDataRange().getValues();
+  
+  // UPDATED: Filters by month, then sorts by Date, AND THEN Alphabetically by Name
   const filtered = allData.filter(r => {
     if(!r[2] || r[2] === "Date") return false;
     let d = new Date(r[2]);
     return !isNaN(d.getTime()) && Utilities.formatDate(d, Session.getScriptTimeZone(), "MMMM yyyy") === tabName;
-  }).sort((a,b) => new Date(a[2]) - new Date(b[2]));
+  }).sort((a,b) => {
+    // 1. Sort by Date first
+    let dateDiff = new Date(a[2]) - new Date(b[2]);
+    if (dateDiff !== 0) return dateDiff;
+    
+    // 2. If it's the exact same date, sort Alphabetically by Last Name then First Name
+    let nameA = (a[3] + " " + a[4]).toUpperCase();
+    let nameB = (b[3] + " " + b[4]).toUpperCase();
+    if (nameA < nameB) return -1;
+    if (nameA > nameB) return 1;
+    return 0;
+  });
   
   let lastRow = monthSheet.getLastRow();
   if(lastRow > 4) {
