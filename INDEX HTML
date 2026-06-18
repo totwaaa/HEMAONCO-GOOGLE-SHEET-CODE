@@ -13,8 +13,18 @@
       
       .section-box { background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #dee2e6; }
       .section-title { font-size: 16px; color: #e83e8c; border-bottom: 2px solid #e83e8c; padding-bottom: 10px; margin-bottom: 20px; text-transform: uppercase; font-weight: bold; }
+      
       label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 12px; color: #495057; text-transform: uppercase; }
-      input[type="text"], input[type="number"], select { width: 100%; padding: 12px; box-sizing: border-box; text-transform: uppercase; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
+      input[type="text"], input[type="number"], select { width: 100%; padding: 12px; box-sizing: border-box; text-transform: uppercase; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; transition: all 0.3s ease; }
+      
+      /* Slight red highlight for unanswered required fields */
+      input:required:invalid, select:required:invalid { border-color: #ff9999; background-color: #fff5f5; }
+      input:required:valid, select:required:valid { border-color: #ced4da; background-color: #ffffff; }
+
+      /* Hide standard number input arrows */
+      input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      input[type=number] { -moz-appearance: textfield; }
+
       .two-col { display: flex; gap: 20px; }
       .two-col .form-group { flex: 1; margin-bottom: 20px; }
       .hidden-group { display: none; }
@@ -29,6 +39,10 @@
       .lock-label { display: flex; justify-content: space-between; align-items: center; }
       .lock-toggle { font-weight: normal; font-size: 11px; color: #e83e8c; cursor: pointer; display: flex; align-items: center; gap: 4px; text-transform: none; }
       .lock-toggle input { width: auto; margin: 0; cursor: pointer; }
+
+      .checkbox-group { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; background-color: #f8f9fa; }
+      .checkbox-group label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; cursor: pointer; }
+      .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; margin: 0; }
     </style>
   </head>
   <body>
@@ -39,14 +53,13 @@
     </div>
     
     <form id="billingForm">
+      
+      <!-- GROUP A: PATIENT PROFILE -->
       <div class="section-box">
-        <h3 class="section-title">Patient Demographics</h3>
+        <h3 class="section-title">Patient Profile</h3>
         <div class="form-group" style="margin-bottom:20px;">
-          <label class="lock-label">
-            Full Name Paste (Last, First Middle) or Type Last Name
-            <label class="lock-toggle"><input type="checkbox" id="lockPatient"> Lock Patient</label>
-          </label>
-          <input type="text" id="lastName" onchange="runSearch()" oninput="resetSearchState()">
+          <label>Full Name Paste (Last, First Middle) or Type Last Name</label>
+          <input type="text" id="lastName" onchange="runSearch()" oninput="resetSearchState()" required>
           <span id="searchStatus" class="status-text">Ready.</span>
         </div>
         <div id="multipleMatchContainer" style="display:none; background-color: #fff3cd; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ffeeba;">
@@ -54,23 +67,53 @@
           <select id="patientDropdown" onchange="selectFromMultiple()"></select>
         </div>
         <div class="two-col">
-          <div class="form-group"><label>First Name</label><input type="text" id="firstName"></div>
-          <div class="form-group"><label>Middle Name</label><input type="text" id="middleName"></div>
+          <div class="form-group"><label>First Name</label><input type="text" id="firstName" required></div>
+          <div class="form-group"><label>Middle Name</label><input type="text" id="middleName" required></div>
         </div>
         <div class="two-col">
           <div class="form-group">
             <label>Physician</label>
-            <input type="text" id="attending" list="attendingList">
+            <input type="text" id="attending" list="attendingList" required>
             <datalist id="attendingList"></datalist>
           </div>
           <div class="form-group">
             <label>Diagnosis</label>
-            <input type="text" id="diagnosis" list="diagnosisList">
+            <input type="text" id="diagnosis" list="diagnosisList" required>
             <datalist id="diagnosisList"></datalist>
           </div>
         </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label>Discount Type</label>
+            <select id="discountType" onchange="toggleDiscountFields()" required>
+              <option value="">-- Select --</option>
+              <option value="NONE">NONE</option>
+              <option value="SENIOR CITIZEN">SENIOR CITIZEN</option>
+              <option value="PWD">PWD</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>PhilHealth</label>
+            <select id="philhealthType" onchange="toggleDiscountFields()" required>
+              <option value="">-- Select --</option>
+              <option value="NO">NO</option>
+              <option value="YES">YES</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>HMO / GL</label>
+          <select id="hmoGl" required>
+            <option value="NONE">NONE</option>
+            <option value="HMO">HMO</option>
+            <option value="GL">GL</option>
+            <option value="EMPLOYEE">EMPLOYEE</option>
+            <option value="COMPANY BENEFIT">COMPANY BENEFIT</option>
+          </select>
+        </div>
       </div>
 
+      <!-- GROUP B: VISIT DETAILS -->
       <div class="section-box">
         <h3 class="section-title">Visit Details</h3>
         <div class="two-col">
@@ -79,21 +122,36 @@
               Date (MMDDYYYY)
               <label class="lock-toggle"><input type="checkbox" id="lockDate"> Lock Date</label>
             </label>
-            <input type="text" id="dateHandled" oninput="formatDate(this)">
+            <input type="text" id="dateHandled" oninput="formatDate(this)" required>
           </div>
-          <div class="form-group"><label>Hours</label><input type="number" id="hours"></div>
+          <div class="form-group">
+            <label>Protocol</label>
+            <input type="text" id="protocol" required>
+          </div>
         </div>
         <div class="two-col">
           <div class="form-group">
             <label>RN In Charge</label>
-            <input type="text" id="rnCharge" list="rnList">
+            <input type="text" id="rnCharge" list="rnList" required>
             <datalist id="rnList"></datalist>
           </div>
-          <div class="form-group"><label>Protocol</label><input type="text" id="protocol"></div>
+          <div class="form-group">
+            <label class="lock-label">
+              Patient Type
+              <label class="lock-toggle"><input type="checkbox" id="lockType"> Lock Type</label>
+            </label>
+            <select id="patientType" required>
+              <option value="">-- Select --</option>
+              <option value="INPATIENT">INPATIENT</option>
+              <option value="OUTPATIENT">OUTPATIENT</option>
+              <option value="ADMITTED">ADMITTED</option>
+              <option value="CHARITY">CHARITY</option>
+            </select>
+          </div>
         </div>
         <div class="form-group" style="margin-bottom:20px;">
           <label>Procedure</label>
-          <select id="procedure">
+          <select id="procedure" required>
             <option value="">-- Choose Procedure --</option>
             <option value="CHEMOTHERAPY">CHEMOTHERAPY</option>
             <option value="CHEMOTHERAPY - INJECTION">CHEMOTHERAPY - INJECTION</option>
@@ -112,54 +170,50 @@
             <option value="IV INSERTION">IV INSERTION</option>
           </select>
         </div>
-        <div class="two-col">
-          <div class="form-group"><label>Patient Type</label><select id="patientType"><option value="">-- Select --</option><option value="INPATIENT">INPATIENT</option><option value="OUTPATIENT">OUTPATIENT</option><option value="ADMITTED">ADMITTED</option><option value="CHARITY">CHARITY</option></select></div>
-          <div class="form-group"><label>HMO / GL</label><select id="hmoGl"><option value="">-- Select --</option><option value="HMO">HMO</option><option value="GL">GL</option><option value="EMPLOYEE">EMPLOYEE</option><option value="COMPANY BENEFIT">COMPANY BENEFIT</option><option value="NONE APPLICABLE">NONE APPLICABLE</option></select></div>
-        </div>
-        <div class="two-col">
-          <div class="form-group"><label>Compounding</label><select id="compounding"><option value="">-- Select --</option><option value="YES">YES</option><option value="NO">NO</option></select></div>
-          <div class="form-group"><label>Handling</label><select id="handling"><option value="">-- Select --</option><option value="YES">YES</option><option value="NO">NO</option></select></div>
-        </div>
       </div>
 
+      <!-- GROUP C: BILLING & PREPARATION -->
       <div class="section-box">
-        <h3 class="section-title">Billing</h3>
-        <div class="two-col">
-          <div class="form-group">
-            <label>Discount Type</label>
-            <select id="discountType" onchange="toggleDiscountFields()">
-              <option value="">-- Select --</option>
-              <option value="NONE">NONE</option>
-              <option value="SENIOR CITIZEN">SENIOR CITIZEN</option>
-              <option value="PWD">PWD</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>PhilHealth Type</label>
-            <select id="philhealthType" onchange="toggleDiscountFields()">
-              <option value="">-- Select --</option>
-              <option value="NONE">NONE</option>
-              <option value="CHEMOTHERAPY">CHEMOTHERAPY</option>
-              <option value="BLOOD TRANSFUSION">BLOOD TRANSFUSION</option>
-              <option value="BMA">BMA</option>
-            </select>
-          </div>
+        <h3 class="section-title">Billing & Preparation</h3>
+        
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Hospital Charges</label>
+          <input type="number" step="any" id="totalCharges" required>
         </div>
-        <div class="two-col">
-          <div class="form-group"><label>Hospital Charges</label><input type="number" id="totalCharges" value="0"></div>
-          <div class="form-group"><label>Other Charges</label><input type="number" id="otherCharges" value="0"></div>
-        </div>
+        
         <div class="two-col">
           <div class="form-group" id="pwdAmountGroup" class="hidden-group">
-            <label>PWD/Senior Amt</label><input type="number" id="pwdAmount" value="0">
+            <label>PWD/Senior Amt</label><input type="number" step="any" id="pwdAmount">
           </div>
           <div class="form-group" id="phAmountGroup" class="hidden-group">
-            <label>PhilHealth Amt</label><input type="number" id="phAmount" value="0">
+            <label>PhilHealth Amt</label><input type="number" step="any" id="phAmount">
           </div>
         </div>
-        <div class="form-group" style="margin-bottom:20px;">
-          <label>Cancelations</label><input type="number" id="cancelations" value="0">
+        
+        <div class="two-col">
+          <div class="form-group">
+            <label>Hours</label>
+            <input type="number" step="any" id="hours" required>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-group" style="margin-top: 25px;">
+              <label style="margin-right: 15px;"><input type="checkbox" id="compoundingCheck"> COMPOUNDING</label>
+              <label><input type="checkbox" id="handlingCheck"> HANDLING</label>
+            </div>
+          </div>
         </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Cancelations</label>
+          <input type="number" step="any" id="cancelations" value="0" required>
+        </div>
+        
+        <!-- Moved Other Charges to default to 0 directly under Cancelations -->
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Other Charges</label>
+          <input type="number" step="any" id="otherCharges" value="0" required>
+        </div>
+
         <div class="form-group">
           <label>Remarks (Optional)</label><input type="text" id="remarks">
         </div>
@@ -183,6 +237,13 @@
           populateDatalist('attendingList', data.attendings);
           populateDatalist('diagnosisList', data.diagnoses);
         }).getDropdownData();
+
+        // DISABLE SCROLL WHEEL ON ALL NUMBER INPUTS
+        document.addEventListener('wheel', function(event) {
+          if (document.activeElement.type === 'number') {
+            document.activeElement.blur();
+          }
+        });
       });
 
       function populateDatalist(id, items) {
@@ -202,62 +263,52 @@
       function toggleDiscountFields() {
         const disc = document.getElementById('discountType').value;
         const ph = document.getElementById('philhealthType').value;
+        const pwdInput = document.getElementById('pwdAmount');
+        const phInput = document.getElementById('phAmount');
         
-        document.getElementById('pwdAmountGroup').style.display = (disc !== "NONE" && disc !== "") ? "block" : "none";
-        document.getElementById('phAmountGroup').style.display = (ph !== "NONE" && ph !== "") ? "block" : "none";
+        // PWD/Senior Toggle Logic
+        if (disc !== "NONE" && disc !== "") {
+            document.getElementById('pwdAmountGroup').style.display = "block";
+            pwdInput.required = true;
+        } else {
+            document.getElementById('pwdAmountGroup').style.display = "none";
+            pwdInput.required = false;
+            pwdInput.value = "";
+        }
         
-        if(disc === "NONE" || disc === "") document.getElementById('pwdAmount').value = 0;
-        if(ph === "NONE" || ph === "") document.getElementById('phAmount').value = 0;
+        // PhilHealth Toggle Logic
+        if (ph === "YES") {
+            document.getElementById('phAmountGroup').style.display = "block";
+            phInput.required = true;
+        } else {
+            document.getElementById('phAmountGroup').style.display = "none";
+            phInput.required = false;
+            phInput.value = "";
+        }
       }
 
       function resetForm() {
-        // Capture Date Lock
         const isDateLocked = document.getElementById('lockDate').checked;
         const savedDate = document.getElementById('dateHandled').value;
 
-        // Capture Patient Lock
-        const isPatientLocked = document.getElementById('lockPatient').checked;
-        const savedLN = document.getElementById('lastName').value;
-        const savedFN = document.getElementById('firstName').value;
-        const savedMN = document.getElementById('middleName').value;
-        const savedAtt = document.getElementById('attending').value;
-        const savedDiag = document.getElementById('diagnosis').value;
-        const savedProtocol = document.getElementById('protocol').value;
-        const savedDisc = document.getElementById('discountType').value;
+        const isTypeLocked = document.getElementById('lockType').checked;
+        const savedType = document.getElementById('patientType').value;
 
-        // Reset all fields
         document.getElementById('billingForm').reset();
         
-        // Restore Date if locked
         if (isDateLocked) {
           document.getElementById('lockDate').checked = true;
           document.getElementById('dateHandled').value = savedDate;
         }
 
-        // Restore Patient if locked
-        if (isPatientLocked) {
-          document.getElementById('lockPatient').checked = true;
-          document.getElementById('lastName').value = savedLN;
-          document.getElementById('firstName').value = savedFN;
-          document.getElementById('middleName').value = savedMN;
-          document.getElementById('attending').value = savedAtt;
-          document.getElementById('diagnosis').value = savedDiag;
-          document.getElementById('protocol').value = savedProtocol;
-          document.getElementById('discountType').value = savedDisc;
+        if (isTypeLocked) {
+          document.getElementById('lockType').checked = true;
+          document.getElementById('patientType').value = savedType;
         }
 
-        // Manage UI States
         document.getElementById('multipleMatchContainer').style.display = 'none';
-        
-        const status = document.getElementById('searchStatus');
-        if (isPatientLocked) {
-          status.innerHTML = "✓ Patient Locked.";
-          status.className = "status-text found";
-        } else {
-          status.innerHTML = "Ready.";
-          status.className = "status-text";
-        }
-
+        document.getElementById('searchStatus').innerHTML = "Ready.";
+        document.getElementById('searchStatus').className = "status-text";
         toggleDiscountFields();
         document.getElementById('submitBtn').disabled = false;
         document.getElementById('submitBtn').innerHTML = "Submit Record";
@@ -333,16 +384,28 @@
         document.getElementById('attending').value = p.attending;
         document.getElementById('diagnosis').value = p.diagnosis;
         document.getElementById('protocol').value = p.protocol;
-        if (p.discountType) {
-          document.getElementById('discountType').value = p.discountType;
-        }
+        if (p.discountType) document.getElementById('discountType').value = p.discountType;
+        
+        if (p.philhealthType) document.getElementById('philhealthType').value = p.philhealthType;
+        
         toggleDiscountFields(); 
       }
 
       function submitData() {
+        // Trigger HTML5 Validation before running the custom logic
+        const form = document.getElementById('billingForm');
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+
         const rawDate = document.getElementById('dateHandled').value;
         if (rawDate.length !== 10) { alert("Invalid Date format. Use MMDDYYYY."); return; }
         const d = rawDate.split('/');
+        
+        const isCompounding = document.getElementById('compoundingCheck').checked ? "YES" : "NO";
+        const isHandling = document.getElementById('handlingCheck').checked ? "YES" : "NO";
+
         const formData = {
           dateHandled: `${d[2]}-${d[0]}-${d[1]}`,
           lastName: document.getElementById('lastName').value,
@@ -356,8 +419,8 @@
           patientType: document.getElementById('patientType').value,
           discountType: document.getElementById('discountType').value,
           philhealthType: document.getElementById('philhealthType').value,
-          compounding: document.getElementById('compounding').value,
-          handling: document.getElementById('handling').value,
+          compounding: isCompounding,
+          handling: isHandling,
           hmoGl: document.getElementById('hmoGl').value,
           totalCharges: document.getElementById('totalCharges').value,
           otherCharges: document.getElementById('otherCharges').value,
@@ -367,9 +430,6 @@
           hours: document.getElementById('hours').value,
           remarks: document.getElementById('remarks').value
         };
-        
-        const req = ["lastName","firstName","middleName","attending","diagnosis","dateHandled","hours","rnCharge","protocol","procedure","patientType","hmoGl","compounding","handling","discountType","philhealthType"];
-        for(let k of req) if(!formData[k]) { alert("Required field missing. Please fill out all necessary fields."); return; }
         
         document.getElementById('submitBtn').disabled = true;
         document.getElementById('submitBtn').innerHTML = "SAVING...";
