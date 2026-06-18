@@ -1,3 +1,8 @@
+function setupPermissions() {
+const email = Session.getActiveUser().getEmail();
+console.log("Permissions granted for: " + email);
+}
+
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Hematology - Oncology Billing Input Form')
@@ -16,7 +21,6 @@ function getSheetUrl() {
   return SpreadsheetApp.getActiveSpreadsheet().getUrl();
 }
 
-// NEW: Scans the database to provide the unique lists for the dropdown autocompletes
 function getDropdownData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const master = ss.getSheetByName("All Responses");
@@ -27,13 +31,11 @@ function getDropdownData() {
   let diagnoses = new Set();
 
   if (master && master.getLastRow() > 1) {
-    // Column H (Index 8) is where RN in Charge is saved
     const masterData = master.getRange(2, 8, master.getLastRow() - 1, 1).getValues();
     masterData.forEach(r => { if(r[0]) rns.add(r[0].toString().toUpperCase().trim()); });
   }
 
   if (db && db.getLastRow() > 1) {
-    // Column D (4) is Attending, Column E (5) is Diagnosis
     const dbData = db.getRange(2, 4, db.getLastRow() - 1, 2).getValues();
     dbData.forEach(r => {
       if(r[0]) attendings.add(r[0].toString().toUpperCase().trim());
@@ -92,7 +94,6 @@ function showSyncModal() {
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Sync Monthly Data');
 }
 
-// UPDATED: Strictly filters tabs to only show "Month YYYY" formatted names (e.g., "April 2026")
 function getMonthlyTabs() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const monthRegex = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}$/i;
@@ -107,7 +108,7 @@ function fixLegacyDiscounts() {
   if (!dbSheet) return SpreadsheetApp.getUi().alert("Error: Database not found.");
   const lastRow = dbSheet.getLastRow();
   if (lastRow < 2) return SpreadsheetApp.getUi().alert("Database is empty.");
-  const range = dbSheet.getRange(2, 1, lastRow - 1, 7);
+  const range = dbSheet.getRange(2, 1, lastRow - 1, 8);
   const data = range.getValues();
   let changes = 0;
   for (let i = 0; i < data.length; i++) {
@@ -130,15 +131,16 @@ function searchPatient(lastNameInput, firstNameInput) {
     const cleanFN = firstNameInput ? firstNameInput.toString().toUpperCase().trim() : "";
     const lastRow = dbSheet.getLastRow();
     if (lastRow < 2) return { status: 'none' };
-    const data = dbSheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    
+    const data = dbSheet.getRange(2, 1, lastRow - 1, 8).getValues();
     let matches = [];
     for (let i = 0; i < data.length; i++) {
       let dbLN = data[i][0].toString().toUpperCase().trim();
       let dbFN = data[i][1].toString().toUpperCase().trim();
       if (cleanFN !== "" && dbLN === cleanLN && dbFN === cleanFN) {
-        return { status: 'single', patient: { lastName: data[i][0], firstName: data[i][1], middleName: data[i][2], attending: data[i][3], diagnosis: data[i][4], protocol: data[i][5], discountType: data[i][6] }};
+        return { status: 'single', patient: { lastName: data[i][0], firstName: data[i][1], middleName: data[i][2], attending: data[i][3], diagnosis: data[i][4], protocol: data[i][5], discountType: data[i][6], philhealthType: data[i][7] }};
       }
-      if (dbLN === cleanLN) matches.push({ lastName: data[i][0], firstName: data[i][1], middleName: data[i][2], attending: data[i][3], diagnosis: data[i][4], protocol: data[i][5], discountType: data[i][6] });
+      if (dbLN === cleanLN) matches.push({ lastName: data[i][0], firstName: data[i][1], middleName: data[i][2], attending: data[i][3], diagnosis: data[i][4], protocol: data[i][5], discountType: data[i][6], philhealthType: data[i][7] });
     }
     if (matches.length === 1) return { status: 'single', patient: matches[0] };
     if (matches.length > 1) return { status: 'multiple', patients: matches };
@@ -162,6 +164,13 @@ function saveRecord(formData) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const clean = (s) => s ? s.toString().replace(/,/g, '').toUpperCase().trim() : '';
     let row = new Array(41).fill('');
+    
+    // Column A: Date/Time Stamp
+    row[0] = new Date(); 
+    
+    // Column B: Automatically pulls the Google Account Email of the person clicking submit
+    row[1] = Session.getActiveUser().getEmail() || "Email Hidden by Privacy Settings"; 
+    
     row[2] = formData.dateHandled;
     row[3] = clean(formData.lastName);
     row[4] = clean(formData.firstName);
@@ -182,8 +191,9 @@ function saveRecord(formData) {
     row[19] = Number(formData.cancelations) || 0;
     row[20] = Number(formData.phAmount) || 0;
     row[21] = Number(formData.pwdAmount) || 0;
-    row[22] = Math.round(Number(formData.hours)) || 0;
+    row[22] = Number(formData.hours) || 0;
     row[40] = clean(formData.remarks);
+    
     const master = ss.getSheetByName("All Responses") || ss.insertSheet("All Responses");
     master.appendRow(row);
     
@@ -193,8 +203,9 @@ function saveRecord(formData) {
     for(let i=1; i<dbData.length; i++) {
       if(clean(dbData[i][0]) === row[3] && clean(dbData[i][1]) === row[4]) { foundIdx = i + 1; break; }
     }
-    const profile = [row[3], row[4], row[5], row[6], row[8], row[10], row[12]];
-    if(foundIdx > -1) db.getRange(foundIdx, 1, 1, 7).setValues([profile]);
+    
+    const profile = [row[3], row[4], row[5], row[6], row[8], row[10], row[12], row[13]];
+    if(foundIdx > -1) db.getRange(foundIdx, 1, 1, 8).setValues([profile]);
     else db.appendRow(profile);
     cleanAndSortDatabase(db);
     
@@ -208,7 +219,7 @@ function saveRecord(formData) {
 function cleanAndSortDatabase(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
-  const range = sheet.getRange(2, 1, lastRow - 1, 7);
+  const range = sheet.getRange(2, 1, lastRow - 1, 8);
   const values = range.getValues().map(r => r.map(c => c.toString().replace(/,/g, '').toUpperCase().trim()));
   range.setValues(values);
   range.sort({column: 1, ascending: true});
@@ -220,7 +231,6 @@ function refreshMonthlyTab(tabName) {
   if (!master) return;
   
   let monthSheet = ss.getSheetByName(tabName);
-  let isNewSheet = false;
   
   if (!monthSheet) {
     const templateSheet = ss.getSheetByName("TEMPLATE");
@@ -230,30 +240,20 @@ function refreshMonthlyTab(tabName) {
     } else {
       monthSheet = ss.insertSheet(tabName);
     }
-    isNewSheet = true;
   }
   
-  if (isNewSheet) {
-    const protection = monthSheet.protect().setDescription('Locked: ' + tabName);
-    protection.removeEditors(protection.getEditors());
-    if (protection.canDomainEdit()) {
-      protection.setDomainEdit(false);
-    }
-  }
+  // NOTE: Sheet locking code completely removed from here!
   
   const allData = master.getDataRange().getValues();
   
-  // UPDATED: Filters by month, then sorts by Date, AND THEN Alphabetically by Name
   const filtered = allData.filter(r => {
     if(!r[2] || r[2] === "Date") return false;
     let d = new Date(r[2]);
     return !isNaN(d.getTime()) && Utilities.formatDate(d, Session.getScriptTimeZone(), "MMMM yyyy") === tabName;
   }).sort((a,b) => {
-    // 1. Sort by Date first
     let dateDiff = new Date(a[2]) - new Date(b[2]);
     if (dateDiff !== 0) return dateDiff;
     
-    // 2. If it's the exact same date, sort Alphabetically by Last Name then First Name
     let nameA = (a[3] + " " + a[4]).toUpperCase();
     let nameB = (b[3] + " " + b[4]).toUpperCase();
     if (nameA < nameB) return -1;
@@ -280,7 +280,11 @@ function refreshMonthlyTab(tabName) {
     monthSheet.getRange(cursor, 3).setValue(`--- ${date} (${grouped[date].length}) ---`);
     monthSheet.getRange(cursor, 1, 1, 41).setBackground("black").setFontColor("white").setFontWeight("bold");
     cursor++;
-    let patients = grouped[date].map(p => {
+    
+    let seen = new Set();
+    let duplicateIndexes = [];
+    
+    let patients = grouped[date].map((p, index) => {
       let cleanRow = p.map(cell => {
         if (cell === null || cell === undefined) return '';
         if (typeof cell === 'string') return cell.toString().replace(/,/g, '').toUpperCase().trim();
@@ -289,11 +293,26 @@ function refreshMonthlyTab(tabName) {
       let fullRow = new Array(41).fill('');
       for (let i = 0; i < Math.min(cleanRow.length, 41); i++) fullRow[i] = cleanRow[i];
       fullRow[2] = ""; 
+      
+      let signature = fullRow.slice(3, 41).join('|');
+      if (seen.has(signature)) {
+        duplicateIndexes.push(index); 
+      } else {
+        seen.add(signature);
+      }
+      
       return fullRow;
     });
+    
     monthSheet.getRange(cursor, 1, patients.length, 41).setValues(patients);
     monthSheet.getRange(cursor, 1, patients.length, 41).setBorder(false, true, false, true, true, false); 
     monthSheet.getRange(cursor, 24, patients.length, 17).clearContent();
+    
+    // HIGHLIGHT DUPLICATES IN LIGHT RED
+    duplicateIndexes.forEach(idx => {
+      monthSheet.getRange(cursor + idx, 1, 1, 41).setBackground("#ffcccc");
+    });
+    
     cursor += patients.length;
   }
   
